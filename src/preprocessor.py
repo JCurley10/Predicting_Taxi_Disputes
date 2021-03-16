@@ -79,14 +79,15 @@ def make_dummies(df):
 
 
 def merge_dfs(df1, df2):
-    df1 = df1.merge(df2, how='left',
+
+    df = df1.merge(df2, how='left',
                     left_on='Pick Up Location Id',
                     right_on='LocationID',
                     suffixes=('_Pick_Up', '_Pick_Up_Zone_name'))
 
     df = df.drop('LocationID', axis=1)
 
-    df = df.merge(taxi_zones, how='left', 
+    df = df.merge(df2, how='left', 
                   left_on='Drop Off Location Id',
                   right_on='LocationID',
                   suffixes=('_PickUp', '_DropOff'))
@@ -98,25 +99,29 @@ def merge_dfs(df1, df2):
 
 if __name__ == "__main__":
 
-    #Authenticated client: 
-
+    # Authenticated client:
     client = Socrata('data.cityofnewyork.us',
                      config.api_key,
                      config.api_username,
                      config.api_password)
 
-    # First 500,000 results, returned as JSON from API / converted to 
+    # First 5000 results, returned as JSON from API / converted to 
     # Python list of dictionaries by sodapy
-
     results = client.get("2upf-qytp", limit=5000)
 
     # Convert to pandas DataFrame and get a smaller sample to try out functions
     results_df = pd.DataFrame.from_records(results)
     sample = results_df.sample(frac=.2)
 
+    # clean the dataframe with a pipe
     taxidf_cleaned = (sample.
                       pipe(rename_cols).
                       pipe(make_numeric).
                       pipe(make_trip_speed).
                       pipe(replace_vals).
                       pipe(make_dummies))
+
+    # read in taxi_zones csv to merge
+    # sys.path.append("../data")
+    taxi_zones = pd.read_csv('../data/taxi+_zone_lookup.csv')
+    merge_dfs(taxidf_cleaned, taxi_zones)
