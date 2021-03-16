@@ -7,24 +7,24 @@ pd.set_option('display.max_columns', None)
 
 def rename_cols(df):
     df.index.rename('Transaction Number', inplace=True)
-    df = df.rename(columns={'vendorid': 'Vendor Id'
-                   , 'tpep_pickup_datetime': 'Pickup Datetime'
-                   , 'tpep_dropoff_datetime': 'Dropoff Datetime'
-                   , 'passenger_count': 'Passenger Count'
-                   , 'trip_distance': 'Trip Distance'
-                   , 'ratecodeid': 'Rate Code Id'
-                   , 'store_and_fwd_flag': 'Store and Forward'
-                   , 'pulocationid': 'Pick Up Location Id'
-                   , 'dolocationid': 'Drop Off Location Id'
-                   , 'payment_type': 'Payment Type'
-                   , 'fare_amount': 'Fare Amount'
-                   , 'extra': 'Extra'
-                   , 'mta_tax': 'MTA Tax'
-                   , 'tip_amount': 'Tip Amount'
-                   , 'tolls_amount': 'Tolls Amount'
-                   , 'improvement_surcharge': 'Improvement Surcharge'
-                   , 'total_amount': 'Total Amount'
-                   , 'congestion_surcharge': 'Congestion Surcharge'})
+    df = df.rename(columns={'vendorid': 'Vendor Id',
+                            'tpep_pickup_datetime': 'Pickup Datetime',
+                            'tpep_dropoff_datetime': 'Dropoff Datetime',
+                            'passenger_count': 'Passenger Count',
+                            'trip_distance': 'Trip Distance',
+                            'ratecodeid': 'Rate Code Id',
+                            'store_and_fwd_flag': 'Store and Forward',
+                            'pulocationid': 'Pick Up Location Id',
+                            'dolocationid': 'Drop Off Location Id',
+                            'payment_type': 'Payment Type',
+                            'fare_amount': 'Fare Amount',
+                            'extra': 'Extra',
+                            'mta_tax': 'MTA Tax',
+                            'tip_amount': 'Tip Amount',
+                            'tolls_amount': 'Tolls Amount',
+                            'improvement_surcharge': 'Improvement Surcharge',
+                            'total_amount': 'Total Amount',
+                            'congestion_surcharge': 'Congestion Surcharge'})
     return df
 
 
@@ -42,9 +42,17 @@ def make_numeric(df):
 
 def make_trip_speed(df):
     df['Pickup Datetime'] = pd.to_datetime(df['Pickup Datetime'])
+
     df['Dropoff Datetime'] = pd.to_datetime(df['Dropoff Datetime'])
-    df['Trip Time (hrs)'] = ((df['Dropoff Datetime'] - df['Pickup Datetime'])/ np.timedelta64(1, 'h')).round(2)
-    df['Trip Speed mph'] = (df['Trip Distance'] / df['Trip Time (hrs)']).round(2)
+
+    df['Trip Time (hrs)'] = ((df['Dropoff Datetime'] - df['Pickup Datetime']) /
+                             np.timedelta64(1, 'h')).round(2)
+
+    df['Trip Speed (mph)'] = (df['Trip Distance'] /
+                              df['Trip Time (hrs)']).round(2)
+ 
+    df['Trip Speed (mph)'] = df['Trip Speed (mph)'].fillna(0)
+
     return df
 
 
@@ -79,21 +87,47 @@ def make_dummies(df):
 
 
 def merge_dfs(df1, df2):
-
     df = df1.merge(df2, how='left',
-                    left_on='Pick Up Location Id',
-                    right_on='LocationID',
-                    suffixes=('_Pick_Up', '_Pick_Up_Zone_name'))
+                   left_on='Pick Up Location Id',
+                   right_on='LocationID',
+                   suffixes=('_Pick_Up', '_Pick_Up_Zone_name'))
 
     df = df.drop('LocationID', axis=1)
 
-    df = df.merge(df2, how='left', 
+    df = df.merge(df2, how='left',
                   left_on='Drop Off Location Id',
                   right_on='LocationID',
                   suffixes=('_PickUp', '_DropOff'))
 
     df = df.drop('LocationID', axis=1)
 
+    # TODO: rename the suffixed column headings
+    return df
+
+
+def replace_nans(df):
+    for col in df.columns:
+        if df[df[col].isna()].shape[0] != 0:
+            df[col] = df[col].fillna('Unknown')
+    return df
+
+
+def reorder_cols(df):
+    # TODO: use the right column header names if renamed the suffixed ones
+    reordered_columns = ['Vendor Id', 'Pickup Datetime', 'Dropoff Datetime',
+                         'Passenger Count', 'Trip Distance', 'Trip Time (hrs)',
+                         'Trip Speed (mph)', 'Rate Code Id', 'Store and Forward',
+                         'Pick Up Location Id', 'Borough_PickUp', 'Zone_PickUp',
+                         'service_zone_PickUp', 'Drop Off Location Id',
+                         'Borough_DropOff', 'Zone_DropOff',
+                         'service_zone_DropOff', 'Fare Amount', 'Extra',
+                         'MTA Tax', 'Tip Amount', 'Tolls Amount',
+                         'Improvement Surcharge', 'Total Amount',
+                         'Congestion Surcharge', 'Payment Type_Cash',
+                         'Payment Type_Credit Card', 'Payment Type_No Charge',
+                         'Payment Type_nan', 'Payment Type_Dispute']
+
+    df = df.reindex(columns=reordered_columns)
     return df
 
 
@@ -105,7 +139,7 @@ if __name__ == "__main__":
                      config.api_username,
                      config.api_password)
 
-    # First 5000 results, returned as JSON from API / converted to 
+    # First 5000 results, returned as JSON from API / converted to
     # Python list of dictionaries by sodapy
     results = client.get("2upf-qytp", limit=5000)
 
@@ -122,6 +156,8 @@ if __name__ == "__main__":
                       pipe(make_dummies))
 
     # read in taxi_zones csv to merge
-    # sys.path.append("../data")
     taxi_zones = pd.read_csv('../data/taxi+_zone_lookup.csv')
-    merge_dfs(taxidf_cleaned, taxi_zones)
+    merged = merge_dfs(taxidf_cleaned, taxi_zones)
+    clean_merged = (merged.
+                    pipe(replace_nans).
+                    pipe(reorder_cols))
