@@ -161,3 +161,6 @@ if __name__ == "__main__":
     clean_merged = (merged.
                     pipe(replace_nans).
                     pipe(reorder_cols))
+
+    # TODO: create a CSV with the preprocessed data and upload it to an S3 bucket
+    
